@@ -3,16 +3,32 @@ name: Build and Release APK
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'          # 标签推送仍然触发
   workflow_dispatch:
+    inputs:
+      tag_name:       # 新增：手动输入标签名
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.set_tag.outputs.release_tag }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set tag for workflow_dispatch
+        id: set_tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "release_tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "release_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -23,7 +39,6 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # 新增：安装 Python 3.10（Chaquopy 需要）
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
@@ -52,6 +67,7 @@ jobs:
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.set_tag.outputs.release_tag }}   # 指定 tag
           files: app/build/outputs/apk/release/*.apk
           generate_release_notes: true
         env:
